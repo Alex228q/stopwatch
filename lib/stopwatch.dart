@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 class StopWatch extends StatefulWidget {
-  const StopWatch({super.key});
+  const StopWatch({super.key, required this.name, required this.email});
+
+  final String name;
+  final String email;
 
   @override
   State<StopWatch> createState() => _StopWatchState();
@@ -14,6 +17,8 @@ class _StopWatchState extends State<StopWatch> {
   late Timer timer;
   bool isTicking = false;
   final laps = <int>[];
+
+  final scrollController = ScrollController();
 
   void _onTick(Timer timer) {
     if (mounted) {
@@ -31,11 +36,17 @@ class _StopWatchState extends State<StopWatch> {
     });
   }
 
-  void _stopTimer() {
+  void _stopTimer(BuildContext context) {
     timer.cancel();
     setState(() {
       isTicking = false;
       milliseconds = 0;
+    });
+
+    final controller =
+        showBottomSheet(context: context, builder: _buildRunCompleteSheet);
+    Future.delayed(const Duration(seconds: 4)).then((_) {
+      controller.close();
     });
   }
 
@@ -43,6 +54,13 @@ class _StopWatchState extends State<StopWatch> {
     setState(() {
       laps.add(milliseconds);
       milliseconds = 0;
+    });
+    Future.delayed(const Duration(milliseconds: 100), () {
+      scrollController.animateTo(
+        scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeIn,
+      );
     });
   }
 
@@ -52,38 +70,21 @@ class _StopWatchState extends State<StopWatch> {
   }
 
   Widget _buildLapDisplay() {
-    return ListView(
-      children: [
-        for (int milliseconds in laps)
-          ListTile(
+    return Scrollbar(
+      child: ListView.builder(
+        controller: scrollController,
+        itemCount: laps.length,
+        itemBuilder: (context, index) {
+          final milliseconds = laps[index];
+          return ListTile(
             leading: const Icon(Icons.timer),
-            title: Text(
+            title: Text('Lap ${index + 1}'),
+            trailing: Text(
               _secondsText(milliseconds),
-              style: const TextStyle(fontSize: 20),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-          ),
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    timer.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.blue.withOpacity(0.4),
-        title: const Text('StopWatch'),
-      ),
-      body: Column(
-        children: [
-          Expanded(child: _buildCounter(context)),
-          Expanded(child: _buildLapDisplay()),
-        ],
+          );
+        },
       ),
     );
   }
@@ -125,15 +126,61 @@ class _StopWatchState extends State<StopWatch> {
           onPressed: isTicking ? _lap : null,
           child: const Text('Lap'),
         ),
-        TextButton(
-          onPressed: isTicking ? _stopTimer : null,
-          style: const ButtonStyle(
-            backgroundColor: WidgetStatePropertyAll(Colors.red),
-            foregroundColor: WidgetStatePropertyAll(Colors.white),
-          ),
-          child: const Text('Stop'),
-        ),
+        Builder(builder: (context) {
+          return TextButton(
+            onPressed: isTicking ? () => _stopTimer(context) : null,
+            style: const ButtonStyle(
+              backgroundColor: WidgetStatePropertyAll(Colors.red),
+              foregroundColor: WidgetStatePropertyAll(Colors.white),
+            ),
+            child: const Text('Stop'),
+          );
+        }),
       ],
     );
+  }
+
+  Widget _buildRunCompleteSheet(BuildContext context) {
+    final totalRuntime = laps.fold(milliseconds, (total, lap) => total + lap);
+    final textTheme = Theme.of(context).textTheme;
+    return SafeArea(
+      child: Container(
+        color: Theme.of(context).cardColor,
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 30.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Run Finished!', style: textTheme.headlineSmall),
+              Text('Total Run Time is ${_secondsText(totalRuntime)}.')
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.blue.withOpacity(0.4),
+        title: Text(widget.name),
+      ),
+      body: Column(
+        children: [
+          Expanded(child: _buildCounter(context)),
+          Expanded(child: _buildLapDisplay()),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    timer.cancel();
+    scrollController.dispose();
+    super.dispose();
   }
 }
